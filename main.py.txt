@@ -1,0 +1,100 @@
+# main.py
+"""
+Macro Quant Trading & Risk Engine
+---------------------------------
+This script fetches market data, news sentiment, computes risk scores,
+and integrates ML models for decision support.
+"""
+
+import os
+import pandas as pd
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+# ===============================
+# MARKET DATA MODULE (Example)
+# ===============================
+def fetch_market_data():
+    """
+    Mock function to fetch market data.
+    Replace with actual API calls (Yahoo Finance, Alpha Vantage, etc.)
+    """
+    data = {
+        "Date": pd.date_range(start="2026-01-01", periods=5, freq="D"),
+        "S&P500": [4000, 4012, 3995, 4020, 4030],
+        "NASDAQ": [13000, 13050, 12980, 13100, 13150],
+        "VIX": [18, 17.5, 18.2, 17.8, 18.1],
+    }
+    df = pd.DataFrame(data)
+    return df
+
+# ===============================
+# NEWS SENTIMENT MODULE
+# ===============================
+class FinBERTSentiment:
+    """
+    Simple wrapper for FinBERT sentiment analysis
+    """
+    def __init__(self):
+        self.tokenizer = AutoTokenizer.from_pretrained("yiyanghkust/finbert-tone")
+        self.model = AutoModelForSequenceClassification.from_pretrained("yiyanghkust/finbert-tone")
+        self.model.eval()
+
+    def sentiment_score(self, texts):
+        """
+        Compute sentiment scores for a list of news headlines
+        """
+        scores = []
+        for text in texts:
+            inputs = self.tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+            with torch.no_grad():
+                logits = self.model(**inputs).logits
+            probs = torch.softmax(logits, dim=1).squeeze().tolist()
+            # FinBERT: [neutral, positive, negative]
+            sentiment = probs[1] - probs[2]  # positive - negative
+            scores.append(sentiment)
+        return scores
+
+# ===============================
+# RISK ENGINE MODULE
+# ===============================
+def compute_risk_score(market_df, news_sentiment):
+    """
+    Compute a simple risk score based on volatility (VIX) and news sentiment
+    """
+    latest_vix = market_df["VIX"].iloc[-1]
+    avg_sentiment = sum(news_sentiment)/len(news_sentiment) if news_sentiment else 0.0
+
+    # Simple formula: higher VIX = higher risk, negative sentiment = higher risk
+    risk_score = latest_vix * (1 - avg_sentiment)
+    return risk_score
+
+# ===============================
+# MAIN EXECUTION
+# ===============================
+def main():
+    print("Fetching market data...")
+    market_df = fetch_market_data()
+    print(market_df)
+
+    print("\nFetching news headlines (mock data)...")
+    news_headlines = [
+        "Federal Reserve signals rate hike amid inflation concerns",
+        "Tech stocks surge on AI breakthrough",
+        "Global tensions cause market uncertainty",
+    ]
+    finbert = FinBERTSentiment()
+    sentiment_scores = finbert.sentiment_score(news_headlines)
+    print("News sentiment scores:", sentiment_scores)
+
+    print("\nComputing risk score...")
+    risk = compute_risk_score(market_df, sentiment_scores)
+    print(f"Macro Risk Score: {risk:.2f}")
+
+    print("\nProcess complete. Ready for further ML model integration or trading signals.")
+
+# ===============================
+# ENTRY POINT
+# ===============================
+if __name__ == "__main__":
+    main()
